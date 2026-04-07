@@ -34,12 +34,25 @@
     @apply bg-xtra-textHover;
   }
 
-  /* Form Element Styling */
-  .form-input {
-    @apply w-full bg-xtra-light border border-xtra-border rounded py-3.5 px-5 text-xtra-dark transition-all duration-300 ease-in-out;
+  /* Glassmorphism & Premium Tokens */
+  .glass-card {
+    @apply bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[2rem] shadow-2xl transition-all duration-500 ease-in-out;
+  }
+  
+  .glass-card:hover {
+    @apply -translate-y-2 border-white/30 shadow-indigo-500/10;
   }
 
-  .form-input:focus {
-    @apply outline-none border-xtra-primary ring-[3px] ring-[#0153fe]/10;
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400;
+  }
+
+  /* Form Element Styling */
+  .form-input {
+    @apply w-full bg-xtra-light border border-xtra-border rounded-xl py-4 px-6 text-xtra-dark transition-all duration-300 ease-in-out placeholder:text-gray-500 focus:outline-none focus:border-xtra-primary/50 focus:ring-4 focus:ring-xtra-primary/5;
+  }
+
+  .glass-card .form-input {
+    @apply bg-white/5 border-white/10 text-white focus:border-indigo-500/50 focus:ring-indigo-500/10;
   }
 }
