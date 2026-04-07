@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+  
+  body {
+    @apply bg-white text-xtra-dark antialiased min-h-screen font-sans;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-xtra-navy font-sans font-bold;
+  }
+}
+
+@layer components {
+  /* XTRA Corporate Theme Utilities */
+  .corporate-card {
+    @apply bg-xtra-white border border-xtra-border rounded shadow-corporate transition-all duration-300 ease-in-out;
+  }
+  
+  .corporate-card:hover {
+    @apply shadow-corporateHover -translate-y-[5px];
+  }
+
+  .btn-primary {
+    @apply bg-xtra-primary text-white font-semibold py-3.5 px-10 rounded transition-colors duration-300 ease-in-out inline-flex items-center justify-center uppercase tracking-widest text-sm border-none;
+  }
+  
+  .btn-primary:hover {
+    @apply bg-xtra-textHover;
+  }
+
+  /* Form Element Styling */
+  .form-input {
+    @apply w-full bg-xtra-light border border-xtra-border rounded py-3.5 px-5 text-xtra-dark transition-all duration-300 ease-in-out;
+  }
+
+  .form-input:focus {
+    @apply outline-none border-xtra-primary ring-[3px] ring-[#0153fe]/10;
+  }
+}
