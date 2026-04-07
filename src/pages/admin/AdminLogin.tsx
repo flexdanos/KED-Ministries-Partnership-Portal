@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../../lib/supabase'
 
 const AdminLogin = () => {
   const [email, setEmail] = useState('')
@@ -12,11 +13,14 @@ const AdminLogin = () => {
   const [loginAttempts, setLoginAttempts] = useState(0)
   const [isLocked, setIsLocked] = useState(false)
   const [lockoutTime, setLockoutTime] = useState(0)
+  const [supabaseStatus, setSupabaseStatus] = useState<'checking' | 'connected' | 'error'>('checking')
   const emailInputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
     emailInputRef.current?.focus()
+    // Test Supabase connection on mount
+    testSupabaseConnection()
   }, [])
 
   useEffect(() => {
@@ -34,6 +38,25 @@ const AdminLogin = () => {
       return () => clearInterval(timer)
     }
   }, [isLocked, lockoutTime])
+
+  const testSupabaseConnection = async () => {
+    try {
+      setSupabaseStatus('checking')
+      
+      // Simple health check by trying to get the current session
+      const { data, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        console.error('Supabase connection error:', error)
+        setSupabaseStatus('error')
+      } else {
+        setSupabaseStatus('connected')
+      }
+    } catch (error) {
+      console.error('Supabase test failed:', error)
+      setSupabaseStatus('error')
+    }
+  }
 
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -67,42 +90,123 @@ const AdminLogin = () => {
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log('🔐 Form submitted')
     e.preventDefault()
     setError('')
     
     if (!validateForm()) {
+      console.log('❌ Validation failed')
       return
     }
     
     if (isLocked) {
+      console.log('🔒 Account locked')
       setError(`Account locked. Try again in ${lockoutTime} seconds`)
       return
     }
     
     setIsLoading(true)
+    console.log('⏳ Loading started')
 
-    // Simulate authentication (replace with real auth logic)
-    setTimeout(() => {
+    try {
+      // Check for demo super admin credentials first
+      console.log('👤 Checking demo credentials:', email)
       if (email === 'admin@kedministries.org' && password === 'admin123') {
-        // Store auth token or session
+        console.log('✅ Demo login successful')
+        // Demo super admin login
         localStorage.setItem('isAdminAuthenticated', 'true')
         localStorage.setItem('adminLoginTime', new Date().toISOString())
+        localStorage.setItem('adminUser', JSON.stringify({
+          id: 'demo-super-admin',
+          email: 'admin@kedministries.org',
+          role: 'super_admin',
+          name: 'Super Admin',
+          isDemo: true
+        }))
         setLoginAttempts(0)
         navigate('/admin/dashboard')
-      } else {
-        const newAttempts = loginAttempts + 1
-        setLoginAttempts(newAttempts)
+        return
+      }
+
+      console.log('🌐 Attempting Supabase auth...')
+      console.log('📡 Supabase client exists:', !!supabase)
+      console.log('🌐 Env URL:', !!import.meta.env.VITE_SUPABASE_URL)
+      
+      // Try Supabase authentication for other admins
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+
+      console.log('📥 Supabase response:', { data, error })
+
+      if (error) {
+        throw error
+      }
+
+      if (data.user) {
+        console.log('✅ User authenticated, checking role...')
+        // Check if user has admin role in your users table
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('role, name')
+          .eq('id', data.user.id)
+          .single()
+
+        console.log('👥 User role check:', { userData, userError })
+
+        if (userError || !userData) {
+          throw new Error('User not found or not authorized as admin')
+        }
+
+        if (userData.role !== 'admin' && userData.role !== 'super_admin') {
+          throw new Error('Access denied. Admin privileges required.')
+        }
+
+        // Verify Supabase session is actually established
+        const { data: sessionData } = await supabase.auth.getSession()
+        if (!sessionData.session) {
+          throw new Error('Session establishment failed')
+        }
+
+        console.log('✅ Supabase session verified:', sessionData.session.user.email)
+
+        // Successful admin login
+        localStorage.setItem('isAdminAuthenticated', 'true')
+        localStorage.setItem('adminLoginTime', new Date().toISOString())
+        localStorage.setItem('adminUser', JSON.stringify({
+          id: data.user.id,
+          email: data.user.email,
+          role: userData.role,
+          name: userData.name || data.user.email,
+          isDemo: false
+        }))
+        setLoginAttempts(0)
         
-        if (newAttempts >= 3) {
-          setIsLocked(true)
-          setLockoutTime(30)
-          setError('Too many failed attempts. Account locked for 30 seconds.')
-        } else {
+        // Final verification before navigation
+        console.log('🚀 All checks passed, navigating to dashboard...')
+        navigate('/admin/dashboard')
+      }
+    } catch (error: any) {
+      console.error('💥 Login error:', error)
+      const newAttempts = loginAttempts + 1
+      setLoginAttempts(newAttempts)
+      
+      if (newAttempts >= 3) {
+        setIsLocked(true)
+        setLockoutTime(30)
+        setError('Too many failed attempts. Account locked for 30 seconds.')
+      } else {
+        if (error.message?.includes('Invalid login credentials')) {
           setError(`Invalid email or password. ${3 - newAttempts} attempts remaining.`)
+        } else {
+          setError(`${error.message || 'Authentication failed'}. ${3 - newAttempts} attempts remaining.`)
         }
       }
+    } finally {
+      console.log('⏹️ Loading ended')
       setIsLoading(false)
-    }, 1500)
+    }
   }
 
   return (
@@ -121,6 +225,19 @@ const AdminLogin = () => {
               <h1 className="text-3xl font-bold text-xtra-navy mb-3">Admin Login</h1>
               <p className="text-gray-600">KED Ministries Portal</p>
             </div>
+
+            {/* Connection Status */}
+            {supabaseStatus === 'error' && (
+              <div className="mb-6 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-xl text-sm animate-fade-in" role="alert">
+                <div className="flex items-center">
+                  <svg className="w-5 h-5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span>Supabase connection issue. Demo admin still available.</span>
+                </div>
+              </div>
+            )}
+          
 
             {/* Login Form */}
             <form className="space-y-6" onSubmit={handleSubmit} noValidate>
@@ -277,7 +394,7 @@ const AdminLogin = () => {
                   <div className="w-full border-t border-xtra-border"></div>
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-xtra-white text-gray-500 font-medium">Demo Credentials</span>
+                  <span className="px-4 bg-xtra-white text-gray-500 font-medium">Super Admin Demo</span>
                 </div>
               </div>
 
@@ -286,9 +403,13 @@ const AdminLogin = () => {
                   <span className="text-sm font-medium text-xtra-dark">Email:</span>
                   <code className="text-sm text-xtra-primary font-mono bg-xtra-light px-2 py-1 rounded border border-xtra-border">admin@kedministries.org</code>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-medium text-xtra-dark">Password:</span>
                   <code className="text-sm text-xtra-primary font-mono bg-xtra-light px-2 py-1 rounded border border-xtra-border">admin123</code>
+                </div>
+                <div className="text-xs text-gray-500 border-t border-xtra-border pt-3">
+                  <p className="mb-1">🔐 This is a demo super admin account</p>
+                  <p>📝 Other admins can login via Supabase authentication</p>
                 </div>
               </div>
             </div>
