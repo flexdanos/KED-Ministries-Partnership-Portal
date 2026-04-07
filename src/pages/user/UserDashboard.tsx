@@ -1,4 +1,92 @@
+import React, { useState } from 'react';
+import PaymentModal from '../../components/payment/PaymentModal';
+import { supabase } from '../../lib/supabase';
+import { Loader2, CheckCircle2 } from 'lucide-react';
+
 const UserDashboard = () => {
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('5000'); // Default 50 GHS
+  const [paymentEmail, setPaymentEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  
+  const [formData, setFormData] = useState({
+    name: '',
+    residence: '',
+    mobile: '',
+    email: '',
+    partnershipType: '',
+    paymentMethod: '',
+    paymentFrequency: [] as string[],
+    notify: false,
+    specialRequest: ''
+  });
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      if (name === 'notify') {
+        setFormData(prev => ({ ...prev, notify: checked }));
+      } else {
+        // Multi-select for frequency
+        setFormData(prev => ({
+          ...prev,
+          paymentFrequency: checked 
+            ? [...prev.paymentFrequency, value]
+            : prev.paymentFrequency.filter(f => f !== value)
+        }));
+      }
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      const { error } = await supabase
+        .from('partner_applications')
+        .insert([
+          { 
+            name: formData.name,
+            residence: formData.residence,
+            mobile: formData.mobile,
+            email: formData.email,
+            partnership_type: formData.partnershipType,
+            payment_method: formData.paymentMethod,
+            payment_frequency: formData.paymentFrequency,
+            notify: formData.notify,
+            special_request: formData.specialRequest,
+            created_at: new Date().toISOString() 
+          }
+        ]);
+        
+      if (error) throw error;
+      
+      setIsSubmitted(true);
+      
+      // Determine the payment amount based on the selected partnership type
+      let amountInPesewas = '5000'; // Default bronze/unknown (50 GHS fallback)
+      if (formData.partnershipType === 'platinum') amountInPesewas = '1000000'; // 10,000 GHS
+      if (formData.partnershipType === 'gold') amountInPesewas = '500000'; // 5,000 GHS
+      if (formData.partnershipType === 'silver') amountInPesewas = '100000'; // 1,000 GHS
+      if (formData.partnershipType === 'bronze') amountInPesewas = '50000'; // 500 GHS
+
+      setPaymentAmount(amountInPesewas);
+      setPaymentEmail(formData.email);
+      setIsPaymentModalOpen(true); // Automatically open Paystack modal
+      
+    } catch (error) {
+      console.error('Error submitting application:', error);
+      alert('Failed to submit application. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white">
@@ -48,10 +136,16 @@ const UserDashboard = () => {
             <p className="text-gray-300 text-lg md:text-xl mb-10 max-w-2xl font-light leading-relaxed animate-fade-in-up-delay-1">
               Join KED Ministries as a dedicated partner. Expand our reach, support our global missions, and make a lasting impact on communities worldwide.
             </p>
-            <div className="animate-fade-in-up-delay-2">
+            <div className="animate-fade-in-up flex flex-wrap gap-4">
               <a href="#partnership" className="btn-primary">
-                Become a Partner
+                Join Membership
               </a>
+              <button 
+                onClick={() => setIsPaymentModalOpen(true)}
+                className="px-10 py-3.5 bg-white/10 backdrop-blur-md border border-white/20 text-white font-semibold rounded hover:bg-white/20 transition-all uppercase tracking-widest text-sm"
+              >
+                Partner Now
+              </button>
             </div>
           </div>
         </div>
@@ -67,177 +161,206 @@ const UserDashboard = () => {
              <div className="w-16 h-1 bg-xtra-primary mx-auto mt-6"></div>
           </div>
 
-          <div className="max-w-4xl mx-auto corporate-card p-8 md:p-12">
-            <form className="space-y-8">
-                
-                {/* Personal Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-bold text-xtra-dark mb-2">Name</label>
-                    <input 
-                      type="text" 
-                      placeholder="Enter your full name" 
-                      className="form-input"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-xtra-dark mb-2">Residence</label>
-                    <input 
-                      type="text" 
-                      placeholder="Enter your address" 
-                      className="form-input"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-xtra-dark mb-2">Mobile</label>
-                    <input 
-                      type="tel" 
-                      placeholder="Enter your mobile number" 
-                      className="form-input"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-xtra-dark mb-2">Email</label>
-                    <input 
-                      type="email" 
-                      placeholder="Enter your email address" 
-                      className="form-input"
-                    />
-                  </div>
+          <div className="max-w-4xl mx-auto corporate-card p-8 md:p-12 relative overflow-hidden">
+            {isSubmitted ? (
+              <div className="text-center py-12 animate-fade-in">
+                <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <CheckCircle2 className="w-10 h-10 text-emerald-600" />
                 </div>
-
-                {/* Partnership Type */}
-                <div>
-                  <label className="block text-sm font-bold text-xtra-dark mb-4">Partnership Type</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <label className="flex flex-col items-center p-6 border border-xtra-border rounded-lg hover:border-xtra-primary transition-colors cursor-pointer text-center">
-                      <input type="radio" name="partnership" value="platinum" className="sr-only peer" />
-                      <div className="peer-checked:border-xtra-primary peer-checked:bg-blue-50/30 w-full">
-                        <svg className="w-12 h-12 mb-3 text-xtra-primary mx-auto" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                        </svg>
-                        <span className="font-bold text-xtra-dark block mb-1">Platinum</span>
-                        <span className="text-xtra-primary font-semibold text-lg">$100</span>
-                      </div>
-                    </label>
-                    
-                    <label className="flex flex-col items-center p-6 border border-xtra-border rounded-lg hover:border-xtra-primary transition-colors cursor-pointer text-center">
-                      <input type="radio" name="partnership" value="gold" className="sr-only peer" />
-                      <div className="peer-checked:border-xtra-primary peer-checked:bg-blue-50/30 w-full">
-                        <svg className="w-12 h-12 mb-3 text-xtra-primary mx-auto" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                        </svg>
-                        <span className="font-bold text-xtra-dark block mb-1">Gold</span>
-                        <span className="text-xtra-primary font-semibold text-lg">$50</span>
-                      </div>
-                    </label>
-                    
-                    <label className="flex flex-col items-center p-6 border border-xtra-border rounded-lg hover:border-xtra-primary transition-colors cursor-pointer text-center">
-                      <input type="radio" name="partnership" value="silver" className="sr-only peer" />
-                      <div className="peer-checked:border-xtra-primary peer-checked:bg-blue-50/30 w-full">
-                        <svg className="w-12 h-12 mb-3 text-xtra-primary mx-auto" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                        </svg>
-                        <span className="font-bold text-xtra-dark block mb-1">Silver</span>
-                        <span className="text-xtra-primary font-semibold text-lg">$10</span>
-                      </div>
-                    </label>
-                    
-                    <label className="flex flex-col items-center p-6 border border-xtra-border rounded-lg hover:border-xtra-primary transition-colors cursor-pointer text-center">
-                      <input type="radio" name="partnership" value="bronze" className="sr-only peer" />
-                      <div className="peer-checked:border-xtra-primary peer-checked:bg-blue-50/30 w-full">
-                        <svg className="w-12 h-12 mb-3 text-xtra-primary mx-auto" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                        </svg>
-                        <span className="font-bold text-xtra-dark block mb-1">Bronze</span>
-                        <span className="text-xtra-primary font-semibold text-lg">$5</span>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Payment Method */}
-                <div>
-                  <label className="block text-sm font-bold text-xtra-dark mb-4">Payment Method</label>
-                  <div className="space-y-3">
-                    <label className="flex items-center p-4 border border-xtra-border rounded-lg hover:border-xtra-primary transition-colors cursor-pointer">
-                      <input type="radio" name="payment" value="bank" className="mr-3 h-4 w-4 text-xtra-primary" />
-                      <svg className="w-6 h-6 mr-3 text-xtra-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                      </svg>
-                      <span className="font-bold text-xtra-dark">Direct Bank Debit</span>
-                    </label>
-                    <label className="flex items-center p-4 border border-xtra-border rounded-lg hover:border-xtra-primary transition-colors cursor-pointer">
-                      <input type="radio" name="payment" value="momo" className="mr-3 h-4 w-4 text-xtra-primary" />
-                      <svg className="w-6 h-6 mr-3 text-xtra-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                      </svg>
-                      <span className="font-bold text-xtra-dark">Momo</span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Additional Options */}
-                <div>
-                  <label className="block text-sm font-bold text-xtra-dark mb-4">Type Of Payment</label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <label className="flex flex-col items-center p-6 border border-xtra-border rounded-lg hover:border-xtra-primary transition-colors cursor-pointer text-center">
-                      <input type="checkbox" className="sr-only peer" />
-                      <div className="peer-checked:border-xtra-primary peer-checked:bg-blue-50/30 w-full">
-                        <svg className="w-12 h-12 mb-3 text-xtra-primary mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span className="font-bold text-xtra-dark">Monthly</span>
-                      </div>
-                    </label>
-                    
-                    <label className="flex flex-col items-center p-6 border border-xtra-border rounded-lg hover:border-xtra-primary transition-colors cursor-pointer text-center">
-                      <input type="checkbox" className="sr-only peer" />
-                      <div className="peer-checked:border-xtra-primary peer-checked:bg-blue-50/30 w-full">
-                        <svg className="w-12 h-12 mb-3 text-xtra-primary mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span className="font-bold text-xtra-dark">Quarterly</span>
-                      </div>
-                    </label>
-
-                    <label className="flex flex-col items-center p-6 border border-xtra-border rounded-lg hover:border-xtra-primary transition-colors cursor-pointer text-center">
-                      <input type="checkbox" className="sr-only peer" />
-                      <div className="peer-checked:border-xtra-primary peer-checked:bg-blue-50/30 w-full">
-                        <svg className="w-12 h-12 mb-3 text-xtra-primary mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span className="font-bold text-xtra-dark">Yearly</span>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-
-                 <label className="flex items-center p-4 rounded-lg hover:border-xtra-primary transition-colors cursor-pointer">
-                    <span className="font-bold text-xtra-dark">Do you want to be notified when payment time is due </span>
-                    <input type="checkbox" className="ml-3 h-4 w-4 text-xtra-primary" />
-                  </label>
-
-                {/* Special Request */}
-                <div>
-                  <label className="block text-sm font-bold text-xtra-dark mb-2">Special Request</label>
-                  <textarea 
-                    rows={4}
-                    placeholder="Enter any special requests or additional information..." 
-                    className="form-input resize-none"
-                  ></textarea>
-                </div>
-
-                <div className="pt-6 text-center">
-                  <button type="submit" className="btn-primary w-full md:w-auto px-12 py-4">
-                    Submit Application
+                <h3 className="text-2xl font-bold text-xtra-navy mb-4">Application Submitted!</h3>
+                <p className="text-gray-600 mb-8 max-w-sm mx-auto">
+                  Thank you for applying to be a partner with KED Ministries. Please proceed to make your partnership contribution.
+                </p>
+                <div className="flex gap-4 justify-center">
+                  <button 
+                    onClick={() => setIsPaymentModalOpen(true)}
+                    className="btn-primary"
+                  >
+                    Proceed to Payment
+                  </button>
+                  <button 
+                    onClick={() => setIsSubmitted(false)}
+                    className="text-xtra-primary font-bold hover:underline px-6 py-3"
+                  >
+                    Submit another application
                   </button>
                 </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-8">
+                  
+                  {/* Personal Information */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-bold text-xtra-dark mb-2">Name</label>
+                      <input 
+                        type="text" 
+                        name="name"
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        placeholder="Enter your full name" 
+                        className="form-input"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-xtra-dark mb-2">Residence</label>
+                      <input 
+                        type="text" 
+                        name="residence"
+                        value={formData.residence}
+                        onChange={handleInputChange}
+                        placeholder="Enter your address" 
+                        className="form-input"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-xtra-dark mb-2">Mobile</label>
+                      <input 
+                        type="tel" 
+                        name="mobile"
+                        value={formData.mobile}
+                        onChange={handleInputChange}
+                        placeholder="Enter your mobile number" 
+                        className="form-input"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-xtra-dark mb-2">Email</label>
+                      <input 
+                        type="email" 
+                        name="email"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        placeholder="Enter your email address" 
+                        className="form-input"
+                        required
+                      />
+                    </div>
+                  </div>
 
-            </form>
+                  {/* Partnership Type */}
+                  <div>
+                    <label className="block text-sm font-bold text-xtra-dark mb-4">Partnership Type</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {['platinum', 'gold', 'silver', 'bronze'].map((type) => (
+                        <label key={type} className={`flex flex-col items-center p-6 border rounded-lg transition-colors cursor-pointer text-center ${formData.partnershipType === type ? 'border-xtra-primary bg-blue-50/30' : 'border-xtra-border hover:border-xtra-primary'}`}>
+                          <input 
+                            type="radio" 
+                            name="partnershipType" 
+                            value={type} 
+                            checked={formData.partnershipType === type}
+                            onChange={handleInputChange}
+                            className="sr-only" 
+                          />
+                          <div className="w-full">
+                            <svg className={`w-12 h-12 mb-3 mx-auto ${formData.partnershipType === type ? 'text-xtra-primary' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                            </svg>
+                            <span className="font-bold text-xtra-dark block mb-1 capitalize">{type}</span>
+                            <span className="text-xtra-primary font-semibold text-lg">
+                              ${type === 'platinum' ? '100' : type === 'gold' ? '50' : type === 'silver' ? '10' : '5'}
+                            </span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Payment Method */}
+                  <div>
+                    <label className="block text-sm font-bold text-xtra-dark mb-4">Payment Method</label>
+                    <div className="space-y-3">
+                      {[
+                        { id: 'bank', label: 'Direct Bank Debit', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
+                        { id: 'momo', label: 'Momo', icon: 'M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z' }
+                      ].map((method) => (
+                        <label key={method.id} className={`flex items-center p-4 border rounded-lg transition-colors cursor-pointer ${formData.paymentMethod === method.id ? 'border-xtra-primary bg-blue-50/30' : 'border-xtra-border hover:border-xtra-primary'}`}>
+                          <input 
+                            type="radio" 
+                            name="paymentMethod" 
+                            value={method.id} 
+                            checked={formData.paymentMethod === method.id}
+                            onChange={handleInputChange}
+                            className="mr-3 h-4 w-4 text-xtra-primary" 
+                          />
+                          <svg className="w-6 h-6 mr-3 text-xtra-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={method.icon} />
+                          </svg>
+                          <span className="font-bold text-xtra-dark">{method.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Additional Options */}
+                  <div>
+                    <label className="block text-sm font-bold text-xtra-dark mb-4">Frequency of Partnership</label>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {['Monthly', 'Quarterly', 'Yearly'].map((freq) => (
+                        <label key={freq} className={`flex flex-col items-center p-6 border rounded-lg transition-colors cursor-pointer text-center ${formData.paymentFrequency.includes(freq) ? 'border-xtra-primary bg-blue-50/30' : 'border-xtra-border hover:border-xtra-primary'}`}>
+                          <input 
+                            type="checkbox" 
+                            name="paymentFrequency"
+                            value={freq} 
+                            checked={formData.paymentFrequency.includes(freq)}
+                            onChange={handleInputChange}
+                            className="sr-only" 
+                          />
+                          <div className="w-full">
+                            <svg className={`w-12 h-12 mb-3 mx-auto ${formData.paymentFrequency.includes(freq) ? 'text-xtra-primary' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="font-bold text-xtra-dark">{freq}</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label className="flex items-center p-4 rounded-lg hover:bg-blue-50/30 transition-colors cursor-pointer">
+                    <span className="font-bold text-xtra-dark">Do you want to be notified when payment time is due </span>
+                    <input 
+                      type="checkbox" 
+                      name="notify"
+                      checked={formData.notify}
+                      onChange={handleInputChange}
+                      className="ml-3 h-4 w-4 text-xtra-primary rounded focus:ring-xtra-primary" 
+                    />
+                  </label>
+
+                  {/* Special Request */}
+                  <div>
+                    <label className="block text-sm font-bold text-xtra-dark mb-2">Special Request</label>
+                    <textarea 
+                      name="specialRequest"
+                      value={formData.specialRequest}
+                      onChange={handleInputChange}
+                      rows={4}
+                      placeholder="Enter any special requests or additional information..." 
+                      className="form-input resize-none"
+                    ></textarea>
+                  </div>
+
+                  <div className="pt-6 text-center">
+                    <button 
+                      type="submit" 
+                      className="btn-primary w-full md:w-auto px-12 py-4 flex items-center justify-center gap-2 mx-auto disabled:opacity-50"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" /> Submitting...
+                        </>
+                      ) : 'Submit Application'}
+                    </button>
+                  </div>
+
+              </form>
+            )}
           </div>
-
         </div>
       </div>
 
@@ -323,6 +446,12 @@ const UserDashboard = () => {
           </div>
        </footer>
 
+      <PaymentModal 
+        isOpen={isPaymentModalOpen} 
+        onClose={() => setIsPaymentModalOpen(false)}
+        defaultAmount={paymentAmount}
+        userEmail={paymentEmail}
+      />
     </div>
   );
 }
