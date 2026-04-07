@@ -1,7 +1,5 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import UserDashboard from '../pages/user/UserDashboard.tsx'
-import UserProfile from '../pages/user/UserProfile.tsx'
-import UserSettings from '../pages/user/UserSettings.tsx'
 import AdminLogin from '../pages/admin/AdminLogin.tsx'
 import AdminLayout from '../layouts/AdminLayout.tsx'
 import AdminDashboard from '../pages/admin/AdminDashboard.tsx'
@@ -26,14 +24,7 @@ export const router = createBrowserRouter([
     element: <UserDashboard />,
     errorElement: <NotFoundPage />,
   },
-  {
-    path: '/profile',
-    element: <UserProfile />,
-  },
-  {
-    path: '/settings',
-    element: <UserSettings />,
-  },
+  
   {
     path: '/admin',
     element: <AdminLogin />,
