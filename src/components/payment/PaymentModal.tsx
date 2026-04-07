@@ -25,11 +25,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, defaultAmo
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  // The config needs to recalculate automatically when email or amount state changes
   const config = {
     reference: (new Date()).getTime().toString(),
     email: email,
-    amount: parseInt(amount), // Paystack expects lowest unit (pesewas/kobo)
-    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+    amount: parseInt(amount), // Paystack requires lowest unit (pesewas/kobo)
+    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
     currency: 'GHS',
   };
 
@@ -62,8 +63,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, defaultAmo
     if (!email || !amount) return;
     
     setLoading(true);
+
+    // Call the Paystack pop up directly with fresh config.
     // @ts-ignore
-    initializePayment(onSuccess, () => setLoading(false));
+    initializePayment({
+      ...config,
+      amount: parseInt(amount), // ensure fresh state 
+      email: email
+    }, onSuccess, () => setLoading(false));
   };
 
   // Sync incoming props to state if they change while modal is unmounted/mounting
