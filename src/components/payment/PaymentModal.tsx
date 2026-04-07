@@ -69,8 +69,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, defaultAmo
   // Sync incoming props to state if they change while modal is unmounted/mounting
   React.useEffect(() => {
     if (isOpen) {
-      if (userEmail) setEmail(userEmail);
-      if (defaultAmount) setAmount(defaultAmount);
+      setEmail(userEmail || '');
+      setAmount(defaultAmount || '5000');
     }
   }, [isOpen, userEmail, defaultAmount]);
 
