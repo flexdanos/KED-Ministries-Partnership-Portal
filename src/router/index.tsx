@@ -4,6 +4,7 @@ import AdminLogin from '../pages/admin/AdminLogin.tsx'
 import AdminLayout from '../layouts/AdminLayout.tsx'
 import AdminDashboard from '../pages/admin/AdminDashboard.tsx'
 import UserManagement from '../pages/admin/UserManagement.tsx'
+import FinanceManagement from '../pages/admin/FinanceManagement.tsx'
 import SystemSettings from '../pages/admin/SystemSettings.tsx'
 import NotFoundPage from '../pages/NotFoundPage.tsx'
 
@@ -54,6 +55,20 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: <UserManagement />,
+      },
+    ],
+  },
+  {
+    path: '/admin/finance',
+    element: (
+      <ProtectedAdminRoute>
+        <AdminLayout />
+      </ProtectedAdminRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <FinanceManagement />,
       },
     ],
   },
