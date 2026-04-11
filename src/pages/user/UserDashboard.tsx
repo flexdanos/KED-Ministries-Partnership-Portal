@@ -17,7 +17,7 @@ const UserDashboard = () => {
     email: '',
     partnershipType: '',
     paymentMethod: '',
-    paymentFrequency: [] as string[],
+    paymentFrequency: '',
     notify: false,
     specialRequest: ''
   });
@@ -29,14 +29,6 @@ const UserDashboard = () => {
       const checked = (e.target as HTMLInputElement).checked;
       if (name === 'notify') {
         setFormData(prev => ({ ...prev, notify: checked }));
-      } else {
-        // Multi-select for frequency
-        setFormData(prev => ({
-          ...prev,
-          paymentFrequency: checked 
-            ? [...prev.paymentFrequency, value]
-            : prev.paymentFrequency.filter(f => f !== value)
-        }));
       }
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
@@ -192,7 +184,7 @@ const UserDashboard = () => {
                   {/* Personal Information */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-bold text-xtra-dark mb-2">Name</label>
+                      <label className="block text-sm font-bold text-xtra-dark mb-2">Name*</label>
                       <input 
                         type="text" 
                         name="name"
@@ -204,7 +196,7 @@ const UserDashboard = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-xtra-dark mb-2">Residence</label>
+                      <label className="block text-sm font-bold text-xtra-dark mb-2">Residence*</label>
                       <input 
                         type="text" 
                         name="residence"
@@ -216,7 +208,7 @@ const UserDashboard = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-xtra-dark mb-2">Mobile</label>
+                      <label className="block text-sm font-bold text-xtra-dark mb-2">Mobile*</label>
                       <input 
                         type="tel" 
                         name="mobile"
@@ -228,7 +220,7 @@ const UserDashboard = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-xtra-dark mb-2">Email</label>
+                      <label className="block text-sm font-bold text-xtra-dark mb-2">Email*</label>
                       <input 
                         type="email" 
                         name="email"
@@ -243,7 +235,7 @@ const UserDashboard = () => {
 
                   {/* Partnership Type */}
                   <div>
-                    <label className="block text-sm font-bold text-xtra-dark mb-4">Partnership Type</label>
+                    <label className="block text-sm font-bold text-xtra-dark mb-4">Partnership Type*</label>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       {['platinum', 'gold', 'silver', 'bronze'].map((type) => (
                         <label key={type} className={`flex flex-col items-center p-6 border rounded-lg transition-colors cursor-pointer text-center ${formData.partnershipType === type ? 'border-xtra-primary bg-blue-50/30' : 'border-xtra-border hover:border-xtra-primary'}`}>
@@ -271,7 +263,7 @@ const UserDashboard = () => {
 
                   {/* Payment Method */}
                   <div>
-                    <label className="block text-sm font-bold text-xtra-dark mb-4">Payment Method</label>
+                    <label className="block text-sm font-bold text-xtra-dark mb-4">Payment Method*</label>
                     <div className="space-y-3">
                       {[
                         { id: 'bank', label: 'Direct Bank Debit', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
@@ -297,20 +289,21 @@ const UserDashboard = () => {
 
                   {/* Additional Options */}
                   <div>
-                    <label className="block text-sm font-bold text-xtra-dark mb-4">Frequency of Partnership</label>
+                    <label className="block text-sm font-bold text-xtra-dark mb-4">Frequency of Partnership*</label>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {['Monthly', 'Quarterly', 'Yearly'].map((freq) => (
-                        <label key={freq} className={`flex flex-col items-center p-6 border rounded-lg transition-colors cursor-pointer text-center ${formData.paymentFrequency.includes(freq) ? 'border-xtra-primary bg-blue-50/30' : 'border-xtra-border hover:border-xtra-primary'}`}>
+                        <label key={freq} className={`flex flex-col items-center p-6 border rounded-lg transition-colors cursor-pointer text-center ${formData.paymentFrequency === freq ? 'border-xtra-primary bg-blue-50/30' : 'border-xtra-border hover:border-xtra-primary'}`}>
                           <input 
-                            type="checkbox" 
+                            type="radio" 
                             name="paymentFrequency"
                             value={freq} 
-                            checked={formData.paymentFrequency.includes(freq)}
+                            checked={formData.paymentFrequency === freq}
                             onChange={handleInputChange}
                             className="sr-only" 
+                            required
                           />
                           <div className="w-full">
-                            <svg className={`w-12 h-12 mb-3 mx-auto ${formData.paymentFrequency.includes(freq) ? 'text-xtra-primary' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className={`w-12 h-12 mb-3 mx-auto ${formData.paymentFrequency === freq ? 'text-xtra-primary' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                             <span className="font-bold text-xtra-dark">{freq}</span>
@@ -328,6 +321,7 @@ const UserDashboard = () => {
                       checked={formData.notify}
                       onChange={handleInputChange}
                       className="ml-3 h-4 w-4 text-xtra-primary rounded focus:ring-xtra-primary" 
+                      required
                     />
                   </label>
 

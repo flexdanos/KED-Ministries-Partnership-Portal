@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { usePaystackPayment } from 'react-paystack';
+import { paystackService } from '../../lib/paystack';
+import KedLoader from '../KedLoader';
 import { supabase } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -65,12 +67,15 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, defaultAmo
     setLoading(true);
 
     // Call the Paystack pop up directly with fresh config.
-    // @ts-ignore
     initializePayment({
-      ...config,
-      amount: parseInt(amount), // ensure fresh state 
-      email: email
-    }, onSuccess, () => setLoading(false));
+      config: {
+        ...config,
+        amount: parseInt(amount), // ensure fresh state 
+        email: email,
+      },
+      onSuccess: onSuccess,
+      onClose: () => setLoading(false)
+    });
   };
 
   // Sync incoming props to state if they change while modal is unmounted/mounting
@@ -162,7 +167,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, defaultAmo
                     className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-5 px-8 rounded-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={loading}
                   >
-                    {loading ? <Loader2 className="animate-spin w-6 h-6" /> : (
+                    {loading ? <KedLoader size="small" /> : (
                       <>
                         Authorize Contribution <ArrowRight className="w-5 h-5 opacity-50 group-hover:translate-x-1 transition-transform" />
                       </>
