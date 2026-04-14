@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { paystackService, type PaystackTransaction } from '../../lib/paystack'
+import { paystackService } from '../../lib/paystack'
 import KedLoader from '../../components/KedLoader'
 import { Users, DollarSign, CheckCircle, Clock, TrendingUp, Activity } from 'lucide-react'
 
@@ -78,9 +78,8 @@ const AdminDashboard = () => {
       const endDate = new Date()
       const startDate = getStartDateForTimeRange(timeRange)
       
-      const [transactionsResponse, totalsResponse] = await Promise.all([
-        paystackService.getTransactionsByDateRange(startDate, endDate),
-        paystackService.getTransactionTotals(startDate, endDate)
+      const [transactionsResponse] = await Promise.all([
+        paystackService.getTransactionsByDateRange(startDate, endDate)
       ])
       
       const formattedTransactions = transactionsResponse.data.map(
@@ -91,8 +90,7 @@ const AdminDashboard = () => {
       // Calculate stats
       const calculatedStats = calculateDashboardStats(
         partnerApplications || [],
-        formattedTransactions,
-        totalsResponse
+        formattedTransactions
       )
       setStats(calculatedStats)
 
@@ -120,8 +118,7 @@ const AdminDashboard = () => {
 
   const calculateDashboardStats = (
     users: PartnerApplication[],
-    transactions: FormattedTransaction[],
-    totals: any
+    transactions: FormattedTransaction[]
   ): DashboardStats => {
     // Calculate total users (partner applications)
     const totalUsers = users.length

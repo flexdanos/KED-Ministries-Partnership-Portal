@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { paystackService, type PaystackTransaction } from '../../lib/paystack'
+import { paystackService } from '../../lib/paystack'
 import KedLoader from '../../components/KedLoader'
 
 interface FormattedTransaction {
@@ -39,8 +39,8 @@ const FinanceManagement = () => {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
+  const [currentPage] = useState(1)
+  const [, setTotalPages] = useState(1)
   const [dateRange, setDateRange] = useState({
     from: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
     to: new Date().toISOString().split('T')[0]
@@ -94,7 +94,7 @@ const FinanceManagement = () => {
       setTransactions(formattedTransactions)
 
       // Calculate statistics
-      const stats = calculateFinancialStats(formattedTransactions, totalsResponse)
+      const stats = calculateFinancialStats(formattedTransactions)
       setFinancialStats(stats)
 
       // Set pagination
@@ -102,26 +102,28 @@ const FinanceManagement = () => {
 
     } catch (err) {
       console.error('Error fetching financial data:', err)
-      console.error('Full error object:', err)
+      
+      // Type guard for error handling
+      const error = err as any
       console.error('Error details:', {
-        message: err.message,
-        status: err.status,
-        stack: err.stack,
-        name: err.name,
-        code: err.code
+        message: error.message,
+        status: error.status,
+        stack: error.stack,
+        name: error.name,
+        code: error.code
       })
       
       // Check specific error types
-      if (err.status === 401) {
+      if (error.status === 401) {
         setError('Authentication failed. Check your Paystack secret key.')
-      } else if (err.status === 403) {
+      } else if (error.status === 403) {
         setError('Access forbidden. Check your Paystack permissions.')
-      } else if (err.status === 429) {
+      } else if (error.status === 429) {
         setError('Rate limit exceeded. Please try again later.')
-      } else if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
         setError('Network error. Check your internet connection.')
       } else {
-        setError(`Failed to fetch financial data: ${err.message}`)
+        setError(`Failed to fetch financial data: ${error.message || 'Unknown error'}`)
       }
     } finally {
       setLoading(false)
@@ -129,8 +131,7 @@ const FinanceManagement = () => {
   }
 
   const calculateFinancialStats = (
-    transactions: FormattedTransaction[],
-    totals: any
+    transactions: FormattedTransaction[]
   ): FinancialStats => {
     const successful = transactions.filter(t => t.status === 'success').length
     const pending = transactions.filter(t => t.status === 'pending').length
@@ -157,27 +158,7 @@ const FinanceManagement = () => {
     }
   }
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, { bg: string; text: string; border: string }> = {
-      success: {
-        bg: 'bg-green-100',
-        text: 'text-green-800',
-        border: 'border-green-300'
-      },
-      pending: {
-        bg: 'bg-yellow-100',
-        text: 'text-yellow-800',
-        border: 'border-yellow-300'
-      },
-      failed: {
-        bg: 'bg-red-100',
-        text: 'text-red-800',
-        border: 'border-red-300'
-      }
-    }
-    return colors[status] || colors.pending
-  }
-
+  
   const getColorClasses = (color: string) => {
     const colors: Record<string, { bg: string; text: string; border: string }> = {
       green: {

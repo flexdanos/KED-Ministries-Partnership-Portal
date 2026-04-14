@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { usePaystackPayment } from 'react-paystack';
-import { paystackService } from '../../lib/paystack';
 import KedLoader from '../KedLoader';
 import { supabase } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,7 +7,7 @@ import {
   X, 
   ShieldCheck, 
   CheckCircle2, 
-  Loader2, 
+ 
   ArrowRight,
   Heart,
   Globe
@@ -158,7 +157,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, defaultAmo
                 <div className="space-y-2 sm:space-y-3">
                   <label className="text-xs sm:text-sm font-bold text-xtra-dark uppercase tracking-wide">Contribution Amount (GHS)</label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg sm:text-xl font-bold text-xtra-primary">₵</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg sm:text-xl font-bold text-xtra-primary">¢</span>
                     <input
                       type="number"
                       className="w-full pl-10 sm:pl-12 pr-4 py-3 border border-xtra-border rounded-lg focus:ring-2 focus:ring-xtra-primary focus:border-transparent text-xtra-dark placeholder-gray-400"
