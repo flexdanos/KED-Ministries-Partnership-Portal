@@ -1,41 +1,43 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import UserDashboard from '../pages/user/UserDashboard.tsx'
-import AdminLogin from '../pages/admin/AdminLogin.tsx'
+import AdminLogin from '../pages/admin/AdminLogin'
 import AdminLayout from '../layouts/AdminLayout.tsx'
 import AdminDashboard from '../pages/admin/AdminDashboard.tsx'
 import UserManagement from '../pages/admin/UserManagement.tsx'
 import FinanceManagement from '../pages/admin/FinanceManagement.tsx'
 import SystemSettings from '../pages/admin/SystemSettings.tsx'
 import NotFoundPage from '../pages/NotFoundPage.tsx'
+import AdminProtectedRoute from '../components/AdminProtectedRoute'
 
-// Admin route protection component
-const ProtectedAdminRoute = ({ children }: { children: React.ReactNode }) => {
+// Login route protection - redirects authenticated users to dashboard
+const ProtectedLoginRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = localStorage.getItem('isAdminAuthenticated') === 'true'
-  if (!isAuthenticated) {
-    // In a real app, you'd use Navigate component
-    window.location.href = '/admin'
+  
+  if (isAuthenticated) {
+    window.location.href = '/admin/dashboard'
     return null
   }
+  
   return <>{children}</>
 }
 
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <UserDashboard />,
+    element:<ProtectedLoginRoute><UserDashboard /></ProtectedLoginRoute>,
     errorElement: <NotFoundPage />,
   },
   
   {
     path: '/admin',
-    element: <AdminLogin />,
+    element: <ProtectedLoginRoute><AdminLogin /></ProtectedLoginRoute>,
   },
   {
     path: '/admin/dashboard',
     element: (
-      <ProtectedAdminRoute>
+      <AdminProtectedRoute>
         <AdminLayout />
-      </ProtectedAdminRoute>
+      </AdminProtectedRoute>
     ),
     children: [
       {
@@ -47,9 +49,9 @@ export const router = createBrowserRouter([
   {
     path: '/admin/users',
     element: (
-      <ProtectedAdminRoute>
+      <AdminProtectedRoute>
         <AdminLayout />
-      </ProtectedAdminRoute>
+      </AdminProtectedRoute>
     ),
     children: [
       {
@@ -61,9 +63,9 @@ export const router = createBrowserRouter([
   {
     path: '/admin/finance',
     element: (
-      <ProtectedAdminRoute>
+      <AdminProtectedRoute>
         <AdminLayout />
-      </ProtectedAdminRoute>
+      </AdminProtectedRoute>
     ),
     children: [
       {
@@ -75,9 +77,9 @@ export const router = createBrowserRouter([
   {
     path: '/admin/settings',
     element: (
-      <ProtectedAdminRoute>
+      <AdminProtectedRoute>
         <AdminLayout />
-      </ProtectedAdminRoute>
+      </AdminProtectedRoute>
     ),
     children: [
       {
