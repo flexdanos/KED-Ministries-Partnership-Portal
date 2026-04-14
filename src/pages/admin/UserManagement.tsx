@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import KedLoader from '../../components/KedLoader'
 
 interface PartnerApplication {
   id: number
@@ -213,7 +214,7 @@ const UserManagement = () => {
       {loading && (
         <div className="bg-white border border-gray-200 rounded-2xl shadow-lg p-6">
           <div className="flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
+            <KedLoader size="xlarge" />
             <span className="ml-2 text-gray-600">Loading partner applications...</span>
           </div>
         </div>

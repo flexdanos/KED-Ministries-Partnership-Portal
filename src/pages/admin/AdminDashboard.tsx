@@ -1,29 +1,209 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { supabase } from '../../lib/supabase'
+import { paystackService, type PaystackTransaction } from '../../lib/paystack'
+import KedLoader from '../../components/KedLoader'
+import { Users, DollarSign, CheckCircle, Clock, TrendingUp, Activity } from 'lucide-react'
+
+interface PartnerApplication {
+  id: number
+  name: string
+  email: string
+  residence: string
+  mobile: string
+  partnership_type: string
+  payment_method: string
+  payment_frequency: string
+  notify: boolean
+  special_request?: string
+  created_at: string
+}
+
+interface FormattedTransaction {
+  id: string
+  reference: string
+  date: string
+  description: string
+  category: string
+  amount: number
+  status: string
+  customer: string
+  paymentMethod: string
+  metadata: any
+}
+
+interface DashboardStats {
+  totalUsers: number
+  totalRevenue: number
+  totalTransactions: number
+  pendingReviews: number
+  successfulTransactions: number
+  failedTransactions: number
+}
 
 const AdminDashboard = () => {
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('month')
+  const [users, setUsers] = useState<PartnerApplication[]>([])
+  const [transactions, setTransactions] = useState<FormattedTransaction[]>([])
+  const [stats, setStats] = useState<DashboardStats>({
+    totalUsers: 0,
+    totalRevenue: 0,
+    totalTransactions: 0,
+    pendingReviews: 0,
+    successfulTransactions: 0,
+    failedTransactions: 0
+  })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [timeRange])
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      // Fetch users from Supabase
+      const { data: partnerApplications, error: usersError } = await supabase
+        .from('partner_applications')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (usersError) throw usersError
+      setUsers(partnerApplications || [])
+
+      // Fetch transactions from Paystack
+      const endDate = new Date()
+      const startDate = getStartDateForTimeRange(timeRange)
+      
+      const [transactionsResponse, totalsResponse] = await Promise.all([
+        paystackService.getTransactionsByDateRange(startDate, endDate),
+        paystackService.getTransactionTotals(startDate, endDate)
+      ])
+      
+      const formattedTransactions = transactionsResponse.data.map(
+        transaction => paystackService.formatTransaction(transaction)
+      )
+      setTransactions(formattedTransactions)
+
+      // Calculate stats
+      const calculatedStats = calculateDashboardStats(
+        partnerApplications || [],
+        formattedTransactions,
+        totalsResponse
+      )
+      setStats(calculatedStats)
+
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err)
+      setError('Failed to load dashboard data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getStartDateForTimeRange = (range: 'week' | 'month' | 'year'): Date => {
+    const now = new Date()
+    switch (range) {
+      case 'week':
+        return new Date(now.setDate(now.getDate() - 7))
+      case 'month':
+        return new Date(now.setMonth(now.getMonth() - 1))
+      case 'year':
+        return new Date(now.setFullYear(now.getFullYear() - 1))
+      default:
+        return new Date(now.setMonth(now.getMonth() - 1))
+    }
+  }
+
+  const calculateDashboardStats = (
+    users: PartnerApplication[],
+    transactions: FormattedTransaction[],
+    totals: any
+  ): DashboardStats => {
+    // Calculate total users (partner applications)
+    const totalUsers = users.length
+    
+    // Calculate pending reviews (new applications in last 7 days)
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    const pendingReviews = users.filter(user => 
+      new Date(user.created_at) > sevenDaysAgo
+    ).length
+
+    // Calculate financial stats
+    const successfulTransactions = transactions.filter(t => t.status === 'success')
+    const failedTransactions = transactions.filter(t => t.status === 'failed')
+    const totalRevenue = successfulTransactions
+      .filter(t => t.amount > 0)
+      .reduce((sum, t) => sum + t.amount, 0)
+    
+    const totalTransactions = transactions.length
+
+    return {
+      totalUsers,
+      totalRevenue,
+      totalTransactions,
+      pendingReviews,
+      successfulTransactions: successfulTransactions.length,
+      failedTransactions: failedTransactions.length
+    }
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-GH', {
+      style: 'currency',
+      currency: 'GHS'
+    }).format(amount)
+  }
+
 
   return (
     <div className="space-y-8">
+      {/* Loading State */}
+      {loading && (
+        <div className="flex justify-center items-center py-12">
+          <KedLoader size="xlarge" />
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <Activity className="w-5 h-5 text-red-600 mr-2" />
+            <span className="text-red-800">{error}</span>
+            <button 
+              onClick={fetchDashboardData}
+              className="ml-auto px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-4xl font-bold gradient-text mb-2">Admin Dashboard</h1>
-          <p className="text-dark-textSecondary">
-            Welcome to the admin dashboard. Monitor and manage the KED Ministries Portal.
+          <h1 className="text-3xl font-semibold text-gray-900 mb-2">Admin Dashboard</h1>
+          <p className="text-gray-600">
+            Monitor and manage the KED Ministries Portal.
           </p>
         </div>
-        <div className="flex space-x-2">
+        <div className="flex gap-2">
           {(['week', 'month', 'year'] as const).map((range) => (
             <button
               key={range}
               onClick={() => setTimeRange(range)}
-              className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
+              disabled={loading}
+              className={`px-4 py-2 rounded-md font-medium transition-colors ${
                 timeRange === range
-                  ? 'bg-dark-primary text-white shadow-lg'
-                  : 'bg-dark-surface border border-dark-border text-dark-textSecondary hover:text-dark-text'
-              }`}
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {range.charAt(0).toUpperCase() + range.slice(1)}
             </button>
@@ -32,314 +212,151 @@ const AdminDashboard = () => {
       </div>
       
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <Link to="/admin/users" className="group cursor-pointer transform transition-all duration-300 hover:scale-105">
-          <div className="p-6 bg-white border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-4xl group-hover:scale-110 transition-transform duration-300">👥</div>
-              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
+      {!loading && !error && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Link to="/admin/users" className="group">
+            <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-2 bg-blue-50 rounded-lg">
+                  <Users className="w-6 h-6 text-blue-600" />
+                </div>
+                <TrendingUp className="w-4 h-4 text-gray-400" />
+              </div>
+              <div className="text-2xl font-semibold text-gray-900 mb-1">{stats.totalUsers}</div>
+              <div className="text-sm text-gray-600">Total Users</div>
+              <div className="mt-2 text-xs text-gray-500">
+                Partner applications
               </div>
             </div>
-            <div className="text-3xl font-bold text-gray-900 mb-1">247</div>
-            <div className="text-sm text-gray-600">Total Users</div>
-            <div className="mt-2 text-xs text-green-600 flex items-center">
-              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
-              +12% from last {timeRange}
+          </Link>
+          
+          <Link to="/admin/finance" className="group">
+            <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-2 bg-green-50 rounded-lg">
+                  <DollarSign className="w-6 h-6 text-green-600" />
+                </div>
+                <TrendingUp className="w-4 h-4 text-gray-400" />
+              </div>
+              <div className="text-2xl font-semibold text-gray-900 mb-1">{formatCurrency(stats.totalRevenue)}</div>
+              <div className="text-sm text-gray-600">Total Revenue</div>
+              <div className="mt-2 text-xs text-gray-500">
+                From {stats.totalTransactions} transactions
+              </div>
+            </div>
+          </Link>
+          
+          <div className="group">
+            <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-2 bg-emerald-50 rounded-lg">
+                  <CheckCircle className="w-6 h-6 text-emerald-600" />
+                </div>
+                <TrendingUp className="w-4 h-4 text-gray-400" />
+              </div>
+              <div className="text-2xl font-semibold text-gray-900 mb-1">{stats.successfulTransactions}</div>
+              <div className="text-sm text-gray-600">Successful</div>
+              <div className="mt-2 text-xs text-gray-500">
+                Completed transactions
+              </div>
             </div>
           </div>
-        </Link>
-        
-        <div className="group cursor-pointer transform transition-all duration-300 hover:scale-105">
-          <div className="p-6 bg-white border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-4xl group-hover:scale-110 transition-transform duration-300">📝</div>
-              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
+          
+          <div className="group">
+            <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-2 bg-amber-50 rounded-lg">
+                  <Clock className="w-6 h-6 text-amber-600" />
+                </div>
+                <TrendingUp className="w-4 h-4 text-gray-400" />
               </div>
-            </div>
-            <div className="text-3xl font-bold text-gray-900 mb-1">1,429</div>
-            <div className="text-sm text-gray-600">Form Submissions</div>
-            <div className="mt-2 text-xs text-green-600 flex items-center">
-              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
-              +8% from last {timeRange}
-            </div>
-          </div>
-        </div>
-        
-        <div className="group cursor-pointer transform transition-all duration-300 hover:scale-105">
-          <div className="p-6 bg-white border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-4xl group-hover:scale-110 transition-transform duration-300">📋</div>
-              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
+              <div className="text-2xl font-semibold text-gray-900 mb-1">{stats.pendingReviews}</div>
+              <div className="text-sm text-gray-600">Pending Reviews</div>
+              <div className="mt-2 text-xs text-gray-500">
+                New this week
               </div>
-            </div>
-            <div className="text-3xl font-bold text-gray-900 mb-1">89</div>
-            <div className="text-sm text-gray-600">Active Forms</div>
-            <div className="mt-2 text-xs text-yellow-600 flex items-center">
-              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
-              -2% from last {timeRange}
-            </div>
-          </div>
-        </div>
-        
-        <Link to="/admin/finance" className="group cursor-pointer transform transition-all duration-300 hover:scale-105">
-          <div className="p-6 bg-white border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-4xl group-hover:scale-110 transition-transform duration-300">💰</div>
-              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-            <div className="text-3xl font-bold text-gray-900 mb-1">$124.5K</div>
-            <div className="text-sm text-gray-600">Total Revenue</div>
-            <div className="mt-2 text-xs text-green-600 flex items-center">
-              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
-              +18% from last {timeRange}
-            </div>
-          </div>
-        </Link>
-        
-        <div className="group cursor-pointer transform transition-all duration-300 hover:scale-105">
-          <div className="p-6 bg-white border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-4xl group-hover:scale-110 transition-transform duration-300">⏳</div>
-              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-            <div className="text-3xl font-bold text-gray-900 mb-1">12</div>
-            <div className="text-sm text-gray-600">Pending Reviews</div>
-            <div className="mt-2 text-xs text-orange-600 flex items-center">
-              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Requires attention
             </div>
           </div>
         </div>
-      </div>
+      )}
       
-      {/* Activity, Status, and Finance Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-lg">
+      {/* Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Transaction Status Chart */}
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
           <div className="p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
-              <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              Recent Activity
-            </h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-6">Transaction Status</h2>
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <div>
-                  <div className="font-medium text-gray-900">New user registration</div>
-                  <div className="text-sm text-gray-600">Sarah Johnson joined the platform</div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Successful</span>
+                  <span className="text-sm font-semibold text-emerald-600">{stats.successfulTransactions}</span>
                 </div>
-                <span className="text-sm text-gray-500 bg-gray-200 px-3 py-1 rounded-full">5 min ago</span>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <div>
-                  <div className="font-medium text-gray-900">Payment received</div>
-                  <div className="text-sm text-gray-600">Ministry Event Registration - $2,500</div>
+                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                  <div 
+                    className="bg-emerald-600 h-2 rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${stats.totalTransactions > 0 ? (stats.successfulTransactions / stats.totalTransactions) * 100 : 0}%` }}
+                  />
                 </div>
-                <span className="text-sm text-gray-500 bg-gray-200 px-3 py-1 rounded-full">1 hour ago</span>
               </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <div>
-                  <div className="font-medium text-gray-900">Form submitted</div>
-                  <div className="text-sm text-gray-600">Ministry Registration Form</div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Failed</span>
+                  <span className="text-sm font-semibold text-amber-600">{stats.failedTransactions}</span>
                 </div>
-                <span className="text-sm text-gray-500 bg-gray-200 px-3 py-1 rounded-full">3 hours ago</span>
-              </div>
-              <Link to="/admin/finance" className="block w-full mt-4 text-center text-sm text-gray-600 hover:text-gray-900 transition-colors bg-gray-100 py-3 rounded-xl font-medium">
-                View all activity →
-              </Link>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-lg">
-          <div className="p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
-              <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-              </div>
-              System Status
-            </h2>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse"></div>
-                  <span className="text-gray-900 font-medium">Database</span>
+                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                  <div 
+                    className="bg-amber-600 h-2 rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${stats.totalTransactions > 0 ? (stats.failedTransactions / stats.totalTransactions) * 100 : 0}%` }}
+                  />
                 </div>
-                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                  Healthy
-                </span>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse"></div>
-                  <span className="text-gray-900 font-medium">API Server</span>
-                </div>
-                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                  Running
-                </span>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse"></div>
-                  <span className="text-gray-900 font-medium">Email Service</span>
-                </div>
-                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                  Active
-                </span>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-yellow-500 rounded-full mr-3 animate-pulse"></div>
-                  <span className="text-gray-900 font-medium">Storage</span>
-                </div>
-                <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
-                  78% Used
-                </span>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-lg">
+        {/* Recent Activity */}
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
           <div className="p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center justify-between">
-              <span className="flex items-center">
-                <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                  <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+            <h2 className="text-lg font-semibold text-gray-900 mb-6">Recent Activity</h2>
+            <div className="space-y-3">
+              {users.slice(0, 2).map((user) => (
+                <div key={user.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div>
+                    <div className="font-medium text-gray-900">{user.name}</div>
+                    <div className="text-sm text-gray-600">New partner application</div>
+                  </div>
+                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                    {new Date(user.created_at).toLocaleDateString()}
+                  </span>
                 </div>
-                Financial Overview
-              </span>
-              <Link to="/admin/finance" className="text-sm text-gray-600 hover:text-gray-900 transition-colors bg-gray-100 px-3 py-1 rounded-lg">
-                Details →
-              </Link>
-            </h2>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <div>
-                  <div className="text-sm text-gray-600">Revenue</div>
-                  <div className="text-lg font-bold text-green-600">$124,563</div>
+              ))}
+              {transactions.slice(0, 2).map((transaction) => (
+                <div key={transaction.id} className={`flex items-center justify-between p-3 rounded-lg border ${
+                  transaction.amount > 0 
+                    ? 'bg-emerald-50 border-emerald-200' 
+                    : 'bg-red-50 border-red-200'
+                }`}>
+                  <div>
+                    <div className="font-medium text-gray-900">{transaction.description}</div>
+                    <div className="text-sm text-gray-600">{formatCurrency(Math.abs(transaction.amount))}</div>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded ${
+                    transaction.status === 'success' 
+                      ? 'text-emerald-700 bg-emerald-100' 
+                      : 'text-amber-700 bg-amber-100'
+                  }`}>
+                    {transaction.status}
+                  </span>
                 </div>
-                <div className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">+12.5%</div>
-              </div>
-              <div className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <div>
-                  <div className="text-sm text-gray-600">Expenses</div>
-                  <div className="text-lg font-bold text-red-600">$87,234</div>
+              ))}
+              {users.length === 0 && transactions.length === 0 && (
+                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
+                  <Activity className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  No recent activity
                 </div>
-                <div className="text-xs text-red-600 bg-red-100 px-2 py-1 rounded-full">+8.2%</div>
-              </div>
-              <div className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <div>
-                  <div className="text-sm text-gray-600">Net Profit</div>
-                  <div className="text-lg font-bold text-blue-600">$37,329</div>
-                </div>
-                <div className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">+18.7%</div>
-              </div>
+              )}
             </div>
-          </div>
-        </div>
-      </div>
-      {/* Quick Actions */}
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-lg">
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
-            <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-              <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            Quick Actions
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Link to="/admin/users" className="p-4 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100 transition-all duration-300 group hover:scale-105">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-gray-200 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="font-medium text-gray-900">Manage Users</div>
-                  <div className="text-sm text-gray-600">Add or edit users</div>
-                </div>
-              </div>
-            </Link>
-            
-            <Link to="/admin/finance" className="p-4 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100 transition-all duration-300 group hover:scale-105">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-gray-200 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="font-medium text-gray-900">View Finance</div>
-                  <div className="text-sm text-gray-600">Financial reports</div>
-                </div>
-              </div>
-            </Link>
-            
-            <button className="p-4 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100 transition-all duration-300 group hover:scale-105">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-gray-200 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="font-medium text-gray-900">Generate Report</div>
-                  <div className="text-sm text-gray-600">Export analytics</div>
-                </div>
-              </div>
-            </button>
-            
-            <button className="p-4 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100 transition-all duration-300 group hover:scale-105">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-gray-200 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="font-medium text-gray-900">Settings</div>
-                  <div className="text-sm text-gray-600">System config</div>
-                </div>
-              </div>
-            </button>
           </div>
         </div>
       </div>
