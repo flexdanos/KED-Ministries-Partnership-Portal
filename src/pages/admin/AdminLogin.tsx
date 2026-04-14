@@ -43,7 +43,7 @@ const AdminLogin = () => {
   const testSupabaseConnection = async () => {
     try {
       setSupabaseStatus('checking')
-      const { data, error } = await supabase.auth.getSession()
+      const { error } = await supabase.auth.getSession()
       if (error) {
         console.error('Supabase connection error:', error)
         setSupabaseStatus('error')

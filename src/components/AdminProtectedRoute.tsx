@@ -4,18 +4,10 @@ import { Navigate, useLocation } from 'react-router-dom'
 import KedLoader from './KedLoader'
 import { Shield } from 'lucide-react'
 
-interface AdminUser {
-  id: string
-  email: string
-  role: 'admin' | 'super_admin'
-  name: string
-  isDemo: boolean
-}
 
 const AdminProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
-  const [user, setUser] = useState<AdminUser | null>(null)
-  const location = useLocation()
+    const location = useLocation()
 
   useEffect(() => {
     const checkAuth = () => {
@@ -23,16 +15,7 @@ const AdminProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       
       if (authStatus === 'true') {
         setIsAuthenticated(true)
-        // Try to get user info if available
-        try {
-          const userStr = localStorage.getItem('adminUser')
-          if (userStr) {
-            setUser(JSON.parse(userStr) as AdminUser)
-          }
-        } catch (error) {
-          console.error('Error parsing user data:', error)
-        }
-      } else {
+              } else {
         setIsAuthenticated(false)
       }
     }
