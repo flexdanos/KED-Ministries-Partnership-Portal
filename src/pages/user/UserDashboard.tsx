@@ -40,6 +40,13 @@ const UserDashboard = () => {
     setIsSubmitting(true);
     
     try {
+      // Determine the payment amount based on the selected partnership type
+      let amountInPesewas = 5000; // Default bronze (50 GHS)
+      if (formData.partnershipType === 'platinum') amountInPesewas = 1000000; // 10,000 GHS
+      if (formData.partnershipType === 'gold') amountInPesewas = 500000; // 5,000 GHS
+      if (formData.partnershipType === 'silver') amountInPesewas = 100000; // 1,000 GHS
+      if (formData.partnershipType === 'bronze') amountInPesewas = 50000; // 500 GHS
+
       const { error } = await supabase
         .from('partner_applications')
         .insert([
@@ -53,22 +60,16 @@ const UserDashboard = () => {
             payment_frequency: formData.paymentFrequency,
             notify: formData.notify,
             special_request: formData.specialRequest,
-            created_at: new Date().toISOString() 
+            amount_in_pesewas: amountInPesewas,
+            status: 'pending',
+            payment_status: 'pending'
           }
         ]);
         
       if (error) throw error;
       
       setIsSubmitted(true);
-      
-      // Determine the payment amount based on the selected partnership type
-      let amountInPesewas = '5000'; // Default bronze/unknown (50 GHS fallback)
-      if (formData.partnershipType === 'platinum') amountInPesewas = '1000000'; // 10,000 GHS
-      if (formData.partnershipType === 'gold') amountInPesewas = '500000'; // 5,000 GHS
-      if (formData.partnershipType === 'silver') amountInPesewas = '100000'; // 1,000 GHS
-      if (formData.partnershipType === 'bronze') amountInPesewas = '50000'; // 500 GHS
-
-      setPaymentAmount(amountInPesewas);
+      setPaymentAmount(amountInPesewas.toString());
       setPaymentEmail(formData.email);
       setIsPaymentModalOpen(true); // Automatically open Paystack modal
       
@@ -289,7 +290,7 @@ const UserDashboard = () => {
 
                   {/* Additional Options */}
                   <div>
-                    <label className="block text-sm font-bold text-xtra-dark mb-4">Frequency of Partnership*</label>
+                    <label className="block text-sm font-bold text-xtra-dark mb-4">Frequency of Partnership]*</label>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {['Monthly', 'Quarterly', 'Yearly'].map((freq) => (
                         <label key={freq} className={`flex flex-col items-center p-6 border rounded-lg transition-colors cursor-pointer text-center ${formData.paymentFrequency === freq ? 'border-xtra-primary bg-blue-50/30' : 'border-xtra-border hover:border-xtra-primary'}`}>
@@ -321,7 +322,6 @@ const UserDashboard = () => {
                       checked={formData.notify}
                       onChange={handleInputChange}
                       className="ml-3 h-4 w-4 text-xtra-primary rounded focus:ring-xtra-primary" 
-                      required
                     />
                   </label>
 
