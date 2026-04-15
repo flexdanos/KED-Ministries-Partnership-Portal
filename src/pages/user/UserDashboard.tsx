@@ -305,7 +305,7 @@ const UserDashboard = () => {
                         onChange={handleInputChange}
                         className="w-4 h-4 text-xtra-primary border-xtra-primary rounded focus:ring-xtra-primary"
                       />
-                      <span>Are you a student?</span>
+                      <span>I am a student</span>
                     </label>
                   </div>
 
