@@ -1,14 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PaymentModal from '../../components/payment/PaymentModal';
 import { supabase } from '../../lib/supabase';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 
 const UserDashboard = () => {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState('5000'); // Default 50 GHS
+  const [paymentAmount, setPaymentAmount] = useState('5000'); // Default $50 USD
   const [paymentEmail, setPaymentEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [activePartnersCount, setActivePartnersCount] = useState(0);
+
+  // Fetch active partners count from Supabase
+  useEffect(() => {
+    const fetchActivePartnersCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('partner_applications')
+          .select('*', { count: 'exact', head: true });
+        
+        if (error) {
+          console.error('Error fetching partners count:', error);
+        } else {
+          setActivePartnersCount(count || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching partners count:', error);
+      }
+    };
+
+    fetchActivePartnersCount();
+  }, []);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -19,7 +41,8 @@ const UserDashboard = () => {
     paymentMethod: '',
     paymentFrequency: '',
     notify: false,
-    specialRequest: ''
+    specialRequest: '',
+    isStudent: false
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -29,6 +52,8 @@ const UserDashboard = () => {
       const checked = (e.target as HTMLInputElement).checked;
       if (name === 'notify') {
         setFormData(prev => ({ ...prev, notify: checked }));
+      } else if (name === 'isStudent') {
+        setFormData(prev => ({ ...prev, isStudent: checked }));
       }
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
@@ -40,12 +65,20 @@ const UserDashboard = () => {
     setIsSubmitting(true);
     
     try {
-      // Determine the payment amount based on the selected partnership type
-      let amountInPesewas = 5000; // Default bronze (50 GHS)
-      if (formData.partnershipType === 'platinum') amountInPesewas = 1000000; // 10,000 GHS
-      if (formData.partnershipType === 'gold') amountInPesewas = 500000; // 5,000 GHS
-      if (formData.partnershipType === 'silver') amountInPesewas = 100000; // 1,000 GHS
-      if (formData.partnershipType === 'bronze') amountInPesewas = 50000; // 500 GHS
+      // Determine the payment amount based on selected partnership type and student status (in USD cents)
+      let amountInCents = 5000; // Default bronze ($50 USD)
+      if (formData.partnershipType === 'platinum') amountInCents = 10000; // $100 USD
+      if (formData.partnershipType === 'gold') amountInCents = 5000; // $50 USD
+      if (formData.partnershipType === 'silver') amountInCents = 1000; // $10 USD
+      if (formData.partnershipType === 'bronze') amountInCents = 5000; // $50 USD
+      
+      // If student is checked, use student rates
+      if (formData.isStudent) {
+        if (formData.partnershipType === 'platinum') amountInCents = 2500; // $25 USD
+        if (formData.partnershipType === 'gold') amountInCents = 1500; // $15 USD
+        if (formData.partnershipType === 'silver') amountInCents = 500; // $5 USD
+        if (formData.partnershipType === 'bronze') amountInCents = 250; // $2.50 USD
+      }
 
       const { error } = await supabase
         .from('partner_applications')
@@ -60,7 +93,7 @@ const UserDashboard = () => {
             payment_frequency: formData.paymentFrequency,
             notify: formData.notify,
             special_request: formData.specialRequest,
-            amount_in_pesewas: amountInPesewas,
+            amount_in_pesewas: amountInCents,
             status: 'pending',
             payment_status: 'pending'
           }
@@ -69,7 +102,7 @@ const UserDashboard = () => {
       if (error) throw error;
       
       setIsSubmitted(true);
-      setPaymentAmount(amountInPesewas.toString());
+      setPaymentAmount(amountInCents.toString());
       setPaymentEmail(formData.email);
       setIsPaymentModalOpen(true); // Automatically open Paystack modal
       
@@ -95,14 +128,14 @@ const UserDashboard = () => {
         <div className="absolute top-0 left-0 right-0 z-30 bg-xtra-dark/95 border-b border-white/10 text-gray-300 py-2.5 animate-fade-in">
            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center text-xs md:text-sm font-medium tracking-wide">
              <div className="flex space-x-6">
-                <span className="flex items-center"><svg className="w-3.5 h-3.5 mr-2 text-xtra-primary" fill="currentColor" viewBox="0 0 20 20"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg> contact@kedministries.org</span>
-                <span className="hidden md:flex items-center"><svg className="w-3.5 h-3.5 mr-2 text-xtra-primary" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg> +1 (800) 123 4567</span>
+                <span className="flex items-center"><svg className="w-3.5 h-3.5 mr-2 text-xtra-primary" fill="currentColor" viewBox="0 0 20 20"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg>iamked2024@gmail.com</span>
+                <span className="hidden md:flex items-center"><svg className="w-3.5 h-3.5 mr-2 text-xtra-primary" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg> (+233) 20 224 4253</span>
              </div>
              <div className="flex items-center space-x-5">
                 <span className="hidden md:inline border-r border-gray-600/50 pr-4 text-gray-400">Follow Us</span>
-                <a href="#" className="hover:text-xtra-primary transition-colors hover:scale-110 transform"><svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/></svg></a>
-                <a href="#" className="hover:text-xtra-primary transition-colors hover:scale-110 transform"><svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg></a>
-                <a href="#" className="hover:text-xtra-primary transition-colors hover:scale-110 transform"><svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"/></svg></a>
+                <a href="https://www.tiktok.com/@thepastorkenn__?_r=1&_t=ZS-95XQSbXbD2G" className="hover:text-xtra-primary transition-colors hover:scale-110 transform"><svg className="w-3.5 h-3.5 m-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.25 1.12 1.16 2.65 1.78 4.25 1.95v3.93c-1.4-.07-2.79-.35-4.09-.83-.68-.26-1.34-.58-1.97-.96v8.78c0 1.45-.38 2.89-1.11 4.16-1.29 2.26-3.71 3.81-6.39 4.04-.47.05-.95.07-1.42.05-2.48-.12-4.84-1.27-6.37-3.15-1.54-1.88-2.35-4.35-2.21-6.85.12-2.18.91-4.27 2.27-5.86 1.36-1.59 3.23-2.68 5.28-3.06.32-.06.65-.1.98-.12v4.03c-.85.15-1.68.49-2.38 1.02-.7.53-1.28 1.22-1.68 2.01-.4.79-.61 1.68-.61 2.58 0 1.45.58 2.84 1.62 3.86 1.04 1.02 2.44 1.59 3.89 1.56 1.45-.03 2.83-.65 3.83-1.71 1-.06 1.87-1.56 1.87-3.01V.02z"/></svg></a>
+                <a href="https://www.instagram.com/iamkedofficial?igsh=NzI3bzEycHMyZms5&utm_source=qr" className="hover:text-xtra-primary transition-colors hover:scale-110 transform"><svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg></a>
+                <a href="https://www.facebook.com/share/1AWn9NPVLZ/" className="hover:text-xtra-primary transition-colors hover:scale-110 transform"><svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"/></svg></a>
              </div>
            </div>
         </div>
@@ -237,8 +270,8 @@ const UserDashboard = () => {
                   {/* Partnership Type */}
                   <div>
                     <label className="block text-sm font-bold text-xtra-dark mb-4">Partnership Type*</label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {['platinum', 'gold', 'silver', 'bronze'].map((type) => (
+                    <div className={`grid gap-4 ${formData.isStudent ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-3 lg:grid-cols-3'}`}>
+                      {['platinum', 'gold', 'silver', ...(formData.isStudent ? ['bronze'] : [])].map((type) => (
                         <label key={type} className={`flex flex-col items-center p-6 border rounded-lg transition-colors cursor-pointer text-center ${formData.partnershipType === type ? 'border-xtra-primary bg-blue-50/30' : 'border-xtra-border hover:border-xtra-primary'}`}>
                           <input 
                             type="radio" 
@@ -260,6 +293,20 @@ const UserDashboard = () => {
                         </label>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Student Checkbox */}
+                  <div className="mt-4">
+                    <label className="flex items-center space-x-3 text-sm font-medium text-xtra-dark">
+                      <input
+                        type="checkbox"
+                        name="isStudent"
+                        checked={formData.isStudent || false}
+                        onChange={handleInputChange}
+                        className="w-4 h-4 text-xtra-primary border-xtra-primary rounded focus:ring-xtra-primary"
+                      />
+                      <span>Are you a student?</span>
+                    </label>
                   </div>
 
                   {/* Payment Method */}
@@ -363,7 +410,7 @@ const UserDashboard = () => {
          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center text-white">
                 <div>
-                   <div className="text-4xl md:text-5xl font-bold mb-2">500<span className="text-xtra-teal">+</span></div>
+                   <div className="text-4xl md:text-5xl font-bold mb-2">{activePartnersCount}<span className="text-xtra-teal">+</span></div>
                    <div className="text-gray-400 text-sm font-bold uppercase tracking-wider">Active Partners</div>
                 </div>
                 <div>
@@ -412,7 +459,7 @@ const UserDashboard = () => {
                       <span className="text-gray-600">Priority registration for global retreats and missions.</span>
                    </li>
                 </ul>
-                <a href="#partnership" className="text-xtra-primary font-bold hover:underline">Read the full story →</a>
+                {/* <a href="#partnership" className="text-xtra-primary font-bold hover:underline">Read the full story →</a> */}
              </div>
 
              {/* Right Image */}
