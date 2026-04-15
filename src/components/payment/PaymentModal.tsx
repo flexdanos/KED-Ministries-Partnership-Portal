@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePaystackPayment } from 'react-paystack';
 import KedLoader from '../KedLoader';
 import { supabase } from '../../lib/supabase';
@@ -7,7 +7,7 @@ import {
   X, 
   ShieldCheck, 
   CheckCircle2, 
- 
+  
   ArrowRight,
   Heart,
   Globe
@@ -22,17 +22,122 @@ interface PaymentModalProps {
 
 const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, defaultAmount = '5000', userEmail = '' }) => {
   const [email, setEmail] = useState(userEmail);
-  const [amount, setAmount] = useState(defaultAmount); // Amount in Pesewas (5000 = 50.00 GHS)
+  const [amount, setAmount] = useState(defaultAmount); // Amount in USD cents (5000 = $50.00 USD)
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [exchangeRate, setExchangeRate] = useState(15.5); // Dynamic exchange rate
+  const [isFetchingRate, setIsFetchingRate] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isLaptop, setIsLaptop] = useState(false);
+
+  // Screen detection hook
+  useEffect(() => {
+    const checkScreenSize = () => {
+      const width = window.innerWidth;
+      setIsLaptop(width >= 1024 && width <= 1440);
+    };
+
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+
+  // Fetch current exchange rate with real-time updates
+  const fetchExchangeRate = async () => {
+    setIsFetchingRate(true);
+    try {
+      // Try multiple API sources for reliability
+      const apis = [
+        'https://api.exchangerate-api.com/v4/latest/USD',
+        'https://open.er-api.com/v6/latest/USD',
+        'https://api.fxratesapi.com/latest?base=USD'
+      ];
+      
+      let rate = null;
+      
+      for (const api of apis) {
+        try {
+          const response = await fetch(api);
+          const data = await response.json();
+          
+          // Handle different API response formats
+          if (api.includes('exchangerate-api.com') && data.rates && data.rates.GHS) {
+            rate = data.rates.GHS;
+            break;
+          } else if (api.includes('er-api.com') && data.rates && data.rates.GHS) {
+            rate = data.rates.GHS;
+            break;
+          } else if (api.includes('fxratesapi.com') && data.rates && data.rates.GHS) {
+            rate = data.rates.GHS;
+            break;
+          }
+        } catch (apiError) {
+          console.warn(`Failed to fetch from ${api}:`, apiError);
+          continue;
+        }
+      }
+      
+      if (rate) {
+        setExchangeRate(rate);
+        setLastUpdated(new Date());
+        console.log(`Current USD to GHS rate: ${rate}`);
+      } else {
+        throw new Error('No valid rate found from any API');
+      }
+    } catch (error) {
+      console.error('Failed to fetch exchange rate, using fallback:', error);
+      // Fallback to a reasonable rate
+      setExchangeRate(15.5);
+    } finally {
+      setIsFetchingRate(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (isOpen) {
+      fetchExchangeRate();
+      // Refresh rate every 5 minutes while modal is open
+      const interval = setInterval(fetchExchangeRate, 5 * 60 * 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isOpen]);
+
+  // Convert USD to GHS for Paystack processing using current rate
+  const convertUSDToGHS = (usdCents: number) => {
+    const usdAmount = usdCents / 100; // Convert cents to dollars
+    const ghsAmount = usdAmount * exchangeRate; // Convert to GHS
+    return Math.round(ghsAmount * 100); // Convert to pesewas
+  };
+
+  // Get converted amount for display
+  const getConvertedAmount = (usdCents: number) => {
+    const usdAmount = usdCents / 100;
+    const ghsAmount = usdAmount * exchangeRate; // Full precision
+    return ghsAmount; // Return full number, let input handle formatting
+  };
 
   // The config needs to recalculate automatically when email or amount state changes
   const config = {
     reference: (new Date()).getTime().toString(),
     email: email,
-    amount: parseInt(amount), // Paystack requires lowest unit (pesewas/kobo)
+    amount: convertUSDToGHS(parseInt(amount)), // Convert USD to GHS for Paystack
     publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
-    currency: 'GHS',
+    currency: 'GHS', // Process in GHS
+    label: `KED Ministries Partnership - ${parseInt(amount) / 100} USD`,
+    metadata: {
+      custom_fields: [
+        {
+          display_name: "Selected USD Amount",
+          variable_name: "usd_amount",
+          value: `${parseInt(amount) / 100} USD`
+        },
+        {
+          display_name: "Exchange Rate",
+          variable_name: "exchange_rate",
+          value: `1 USD = ${exchangeRate} GHS`
+        }
+      ]
+    }
   };
 
   const initializePayment = usePaystackPayment(config);
@@ -44,9 +149,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, defaultAmo
       .from('payments')
       .insert([{ 
           email: email, 
-          amount: parseInt(amount) / 100, 
+          amount: parseInt(amount) / 100, // Store USD amount in database
           reference: reference.reference,
-          currency: 'GHS',
+          currency: 'USD', // Record as USD
           status: 'success',
           created_at: new Date()
       }]);
@@ -103,7 +208,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, defaultAmo
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="w-full max-w-md sm:max-w-lg lg:max-w-2xl bg-white rounded-2xl shadow-2xl relative overflow-hidden z-10 border border-xtra-border"
+        className={`w-full max-w-sm sm:max-w-md lg:max-w-xl bg-white rounded-2xl shadow-2xl relative z-10 border border-xtra-border ${isLaptop ? 'overflow-y-auto' : 'overflow-hidden'} max-h-[90vh] lg:max-h-[80vh]`}
       >
         {/* Header Bar */}
         <div className="bg-xtra-primary px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
@@ -128,20 +233,20 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, defaultAmo
             >
               {/* Header */}
               <div className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 lg:pt-10">
-                <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
-                  <div className="p-3 sm:p-4 bg-xtra-primary/10 rounded-xl sm:rounded-2xl border border-xtra-primary/20">
-                    <Heart className="w-6 h-6 sm:w-8 sm:h-8 text-xtra-primary" />
+                <div className="flex flex-col lg:flex-row items-center gap-4 lg:gap-8 mb-6 lg:mb-10">
+                  <div className="p-3 lg:p-4 bg-xtra-primary/10 rounded-xl lg:rounded-2xl border border-xtra-primary/20">
+                    <Heart className="w-6 h-6 lg:w-8 lg:h-8 text-xtra-primary" />
                   </div>
-                  <div className="text-center sm:text-left">
-                    <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-xtra-dark mb-1">Partner with KED</h2>
-                    <p className="text-xs sm:text-sm text-xtra-primary font-semibold uppercase tracking-wide flex items-center justify-center sm:justify-start gap-2">
+                  <div className="text-center lg:text-left">
+                    <h2 className="text-xl lg:text-2xl font-bold text-xtra-dark mb-1">Partner with KED</h2>
+                    <p className="text-xs sm:text-sm text-xtra-primary font-semibold uppercase tracking-wide flex items-center justify-center lg:justify-start gap-2">
                       <Globe className="w-3 h-3 sm:w-4 sm:h-4" /> Secure Payment • GHS
                     </p>
                   </div>
                 </div>
               </div>
 
-              <form onSubmit={handlePayment} className="space-y-6 sm:space-y-8 px-4 sm:px-6 lg:px-8 pb-6 sm:pb-8 lg:pb-10">
+              <form onSubmit={handlePayment} className="space-y-6 lg:space-y-8 px-4 sm:px-6 lg:px-8 pb-6 sm:pb-8 lg:pb-10">
                 <div className="space-y-2 sm:space-y-3">
                   <label className="text-xs sm:text-sm font-bold text-xtra-dark uppercase tracking-wide">Your Email</label>
                   <input
@@ -155,16 +260,43 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, defaultAmo
                 </div>
 
                 <div className="space-y-2 sm:space-y-3">
-                  <label className="text-xs sm:text-sm font-bold text-xtra-dark uppercase tracking-wide">Contribution Amount (GHS)</label>
+                  <label className="text-xs sm:text-sm font-bold text-xtra-dark uppercase tracking-wide">Contribution Amount</label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg sm:text-xl font-bold text-xtra-primary">¢</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg sm:text-xl font-bold text-xtra-primary">&#x20b5;</span>
                     <input
                       type="number"
                       className="w-full pl-10 sm:pl-12 pr-4 py-3 border border-xtra-border rounded-lg focus:ring-2 focus:ring-xtra-primary focus:border-transparent text-xtra-dark placeholder-gray-400"
-                      value={parseInt(amount) / 100}
-                      onChange={(e) => setAmount((parseFloat(e.target.value) * 100).toString())}
+                      value={getConvertedAmount(parseInt(amount)).toFixed(2)}
+                      onChange={(e) => setAmount((parseFloat(e.target.value) / exchangeRate * 100).toString())}
+                      step="0.01"
+                      min="0"
                       required
                     />
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-600">
+                    <div className="flex items-center gap-2">
+                      {isFetchingRate ? (
+                        <>
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                          <span>Updating rate...</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span>Rate: 1 USD = {exchangeRate.toFixed(2)} GHS</span>
+                        </>
+                      )}
+                    </div>
+                    {lastUpdated && (
+                      <button
+                        type="button"
+                        onClick={fetchExchangeRate}
+                        className="text-xtra-primary hover:text-xtra-primary/80 font-medium"
+                        disabled={isFetchingRate}
+                      >
+                        {isFetchingRate ? 'Updating...' : 'Refresh'}
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -209,7 +341,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, defaultAmo
               </div>
               <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-xtra-dark mb-3 sm:mb-4">Contribution Received</h2>
               <p className="text-gray-600 text-base sm:text-lg mb-8 sm:mb-10 max-w-sm mx-auto">
-                Thank you for your partnership! <br /> ₵{parseInt(amount) / 100} has been processed successfully.
+                Thank you for your partnership! <br /> 
+                ${parseInt(amount) / 100} USD (₵{getConvertedAmount(parseInt(amount))} GHS) has been processed successfully.
               </p>
               <button 
                 onClick={onClose}
