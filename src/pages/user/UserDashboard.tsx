@@ -7,6 +7,7 @@ const UserDashboard = () => {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('5000'); // Default $50 USD
   const [paymentEmail, setPaymentEmail] = useState('');
+  const [paymentPhone, setPaymentPhone] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [activePartnersCount, setActivePartnersCount] = useState(0);
@@ -104,7 +105,8 @@ const UserDashboard = () => {
       setIsSubmitted(true);
       setPaymentAmount(amountInCents.toString());
       setPaymentEmail(formData.email);
-      setIsPaymentModalOpen(true); // Automatically open Paystack modal
+      setPaymentPhone(formData.mobile);
+      setIsPaymentModalOpen(true);
       
     } catch (error) {
       console.error('Error submitting application:', error);
@@ -487,11 +489,12 @@ const UserDashboard = () => {
           </div>
        </footer>
 
-      <PaymentModal 
-        isOpen={isPaymentModalOpen} 
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         defaultAmount={paymentAmount}
         userEmail={paymentEmail}
+        userPhone={paymentPhone}
       />
     </div>
   );
