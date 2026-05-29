@@ -121,7 +121,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           clientReference: reference,
         },
         {
-          onPaymentSuccess: async (data) => {
+          onPaymentSuccess: async () => {
             // Update record to success
             await supabase
               .from('payments')

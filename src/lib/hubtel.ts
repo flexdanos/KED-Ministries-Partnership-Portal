@@ -11,6 +11,7 @@ export const hubtelConfig: Config = {
   merchantAccount,
   basicAuth: btoa(`${clientId}:${clientSecret}`),
   integrationType: 'External',
+  allowedChannels: ['mobileMoney', 'bankCard'],
 }
 
 export function openHubtelModal(
@@ -23,10 +24,10 @@ export function openHubtelModal(
 }
 
 export async function checkTransactionStatus(clientReference: string): Promise<any> {
-  const url = `https://api-txnstatus.hubtel.com/transactions/${import.meta.env.VITE_HUBTEL_MERCHANT_ACCOUNT}/status?clientReference=${clientReference}`
+  const url = `https://api-txnstatus.hubtel.com/transactions/0553535875/status?clientReference=${clientReference}`
   const response = await fetch(url, {
     headers: {
-      Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+      Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`, // REST API still uses standard Basic Auth
     },
   })
   return response.json()
