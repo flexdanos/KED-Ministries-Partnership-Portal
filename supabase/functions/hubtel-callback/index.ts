@@ -1,46 +1,64 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Setup type definitions for built-in Supabase Runtime APIs
-import "@supabase/functions-js/edge-runtime.d.ts";
-import { withSupabase } from "@supabase/server";
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+)
 
-console.log("Hello from Functions!");
+Deno.serve(async (req) => {
+  if (req.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405 })
+  }
 
-// This endpoint uses 'publishable' | 'secret' access, apiKey is required.
-// Use publishable for Client-facing, key-validated endpoints
-// Use secret for Server-to-server, internal calls
-export default {
-  fetch: withSupabase({ auth: ["publishable", "secret"] }, async (req, ctx) => {
-    // Called by another service with a secret key
-    // ctx.supabaseAdmin bypasses RLS — use for privileged operations
-    /*
-    if (ctx.authMode === "secret") {
-      const { user_id } = await req.json();
-      const { data } = await ctx.supabaseAdmin.auth.admin.getUserById(user_id);
+  try {
+    const body = await req.json()
+    console.log('Hubtel callback received:', JSON.stringify(body, null, 2))
 
-      return Response.json({
-        email: data?.user?.email,
-      });
+    // Hubtel sends ResponseCode "0000" for success
+    const isSuccess =
+      body?.ResponseCode === '0000' ||
+      body?.Status === 'Success' ||
+      body?.status === 'success'
+
+    const clientReference =
+      body?.Data?.ClientReference ||
+      body?.ClientReference ||
+      body?.clientReference
+
+    if (!clientReference) {
+      console.error('Missing clientReference in callback:', body)
+      return new Response(JSON.stringify({ error: 'Missing clientReference' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
-    */
 
-    const { name } = await req.json();
+    const status = isSuccess ? 'success' : 'failed'
 
-    return Response.json({
-      message: `Hello ${name}!`,
-    });
-  }),
-};
+    const { error } = await supabase
+      .from('payments')
+      .update({ status })
+      .eq('reference', clientReference)
 
-/* To invoke locally:
+    if (error) {
+      console.error('Supabase update error:', error)
+      return new Response(JSON.stringify({ error: 'DB update failed' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
 
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
+    console.log(`Payment ${clientReference} updated to: ${status}`)
 
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/hubtel-callback' \
-    --header 'apiKey: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH' \
-    --data '{"name":"Functions"}'
-
-*/
+    return new Response(JSON.stringify({ received: true, status }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  } catch (err) {
+    console.error('Callback handler error:', err)
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+})
