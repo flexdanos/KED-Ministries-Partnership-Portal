@@ -31,6 +31,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [email, setEmail] = useState(userEmail);
   const [phone, setPhone] = useState(userPhone);
   const [amount, setAmount] = useState(defaultAmount); // USD cents internally
+  const [amountGHSInput, setAmountGHSInput] = useState(''); // Track input field separately
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +79,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     if (isOpen) {
       setEmail(userEmail || '');
       setPhone(userPhone || '');
-      setAmount(defaultAmount || '5000');
+      const amt = defaultAmount || '5000';
+      setAmount(amt);
+      const defaultUSD = parseInt(amt) / 100;
+      setAmountGHSInput((defaultUSD * 15.5).toFixed(2)); // Initialize with default rate
       setError(null);
       setSuccess(false);
       fetchExchangeRate();
@@ -243,9 +247,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     <input
                       type="number"
                       className="w-full pl-10 sm:pl-12 pr-4 py-3 border border-xtra-border rounded-lg focus:ring-2 focus:ring-xtra-primary focus:border-transparent text-xtra-dark placeholder-gray-400"
-                      value={amountGHS}
+                      value={amountGHSInput}
                       onChange={(e) => {
-                        const ghs = parseFloat(e.target.value) || 0;
+                        const ghsValue = e.target.value;
+                        setAmountGHSInput(ghsValue);
+                        const ghs = parseFloat(ghsValue) || 0;
                         setAmount(Math.round((ghs / exchangeRate) * 100).toString());
                       }}
                       step="0.01"
